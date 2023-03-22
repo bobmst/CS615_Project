@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from layers import Layer
 
+np.random.seed(seed=42)
+
 # ----------------------------------------------------------------
 # Layers
 class InputLayer(Layer):
@@ -224,7 +226,6 @@ class FullyConnectedLayer(Layer):
     # Output : None
     def __init__(self, sizeIn, sizeOut):
         super().__init__()
-        np.random.seed(seed=42)
         self.weight = np.random.uniform(low=-1e-4, high=1e-4, size=(sizeIn, sizeOut))
         self.bias = np.random.uniform(low=-1e-4, high=1e-4, size=(sizeOut,))
 
@@ -319,6 +320,215 @@ class FullyConnectedLayer(Layer):
 
         self.weight -= delta_w
         self.bias -= delta_b
+
+
+# ----------------------------------------------------------------
+# Covolution Layer
+class ConvolutionLayer(Layer):
+    def __init__(self, kernel_num, kernel_size):
+        super().__init__()
+        self.kernel_num = kernel_num
+        self.kernel_size = kernel_size
+        # divide by to kernel_size**2 reduce the variance of our initial values
+        self.kernels = np.random.randn(kernel_num, kernel_size, kernel_size) / (
+            kernel_size**2
+        )
+
+    def get_kernels(self):
+        return self.kernels
+
+    def set_kernels(self, kernels):
+        self.kernels = kernels
+        self.kernel_num = kernels.shape[0]
+        self.kernel_size = kernels.shape[1]
+
+    def iterate_regions(self, image, region_size):
+        h, w = image.shape
+
+        # for i in range(h - (self.kernel_num // 2 + 1)):
+        #     for j in range(w - (self.kernel_num // 2 + 1)):
+        for i in range(h - region_size + 1):
+            for j in range(w - region_size + 1):
+                im_region = image[i : (i + region_size), j : (j + region_size)]
+                yield im_region, i, j
+
+    def forward(self, dataIn):
+        self.setPrevIn(dataIn)
+
+        o, h, w = dataIn.shape
+        output = np.zeros(
+            (
+                o,
+                h - self.kernel_num + 1,
+                w - self.kernel_num + 1,
+            )
+        )
+
+        for row in range(o):
+            for im_region, i, j in self.iterate_regions(dataIn[row], self.kernel_num):
+                print(row)
+                print(im_region, i, j, "\n")
+                output[row, i, j] = np.sum(im_region * self.kernels)
+
+        self.setPrevOut(output)
+        return output
+
+    # def backprop(self, d_L_d_out, learn_rate):
+    #     """
+    #     Performs a backward pass of the conv layer.
+    #     - d_L_d_out is the loss gradient for this layer's outputs.
+    #     - learn_rate is a float.
+    #     """
+    #     d_L_d_filters = np.zeros(self.filters.shape)
+
+    #     for im_region, i, j in self.iterate_regions(self.last_input):
+    #         for f in range(self.num_filters):
+    #             d_L_d_filters[f] += d_L_d_out[i, j, f] * im_region
+
+    #     # Update filters
+    #     self.filters -= learn_rate * d_L_d_filters
+
+    #     # We aren't returning anything here since we use Conv3x3 as the first layer in our CNN.
+    #     # Otherwise, we'd need to return the loss gradient for this layer's inputs, just like every
+    #     # other layer in our CNN.
+    #     return None
+
+    def gradient(self):
+        pass
+
+    def backward(self, gradIn, eta=0.01):
+
+        # prevIn = self.getPrevIn()
+        # gradOut = np.zeros((self.kernel_num, self.kernel_size, self.kernel_size))
+
+        # print(gradIn.shape)
+        # for row in range(gradIn.shape[0]):
+        #     for im_region, i, j in self.iterate_regions(prevIn[row]):
+        #         print(row)
+        #         print(im_region, i, j, "\n")
+        #         # for f in range(self.kernel_num):
+        #         gradOut[row] += gradIn[row, i, j] * im_region
+        prevIn = self.getPrevIn()
+        o, h, w = prevIn.shape
+        gradOut = np.zeros(
+            (
+                o,
+                h - gradIn.shape[1] + 1,
+                w - gradIn.shape[1] + 1,
+            )
+        )
+
+        for row in range(o):
+            for im_region, i, j in self.iterate_regions(prevIn[row], gradIn.shape[1]):
+                print(row)
+                print(im_region, i, j, "\n")
+                gradOut[row, i, j] = np.sum(im_region * gradIn[row])
+
+            # TODO check learning part
+            self.kernels -= eta * gradOut[row]
+        return gradOut
+
+    def fit(self, dataIn):
+        return dataIn
+
+
+# Max pooling
+class MaxPoolingLayer(Layer):
+    def __init__(self, stride):
+        super().__init__()
+        self.stride = stride
+
+    def iterate_regions(self, image):
+        h, w = image.shape
+        new_h = h // self.stride
+        new_w = w // self.stride
+        for i in range(new_h):
+            for j in range(new_w):
+                im_region = image[
+                    (i * self.stride) : (i * self.stride + self.stride),
+                    (j * self.stride) : (j * self.stride + self.stride),
+                ]
+                yield im_region, i, j
+
+    def forward(self, dataIn):
+        self.setPrevIn(dataIn)
+        o, h, w = dataIn.shape
+        dataOut = np.zeros((o, h // self.stride, w // self.stride))
+        for row in range(o):
+            for im_region, i, j in self.iterate_regions(dataIn[row]):
+                # print(row)
+                # print(im_region, i, j, "\n")
+                dataOut[row, i, j] = np.amax(im_region, axis=(0, 1))
+        self.setPrevOut(dataOut)
+        return dataOut
+
+    def gradient(self):
+        pass
+
+    def backward(self, gradIn):
+        prevIn = self.getPrevIn()
+        gradOut = np.zeros(prevIn.shape)
+
+        for row in range(prevIn.shape[0]):
+            for im_region, i, j in self.iterate_regions(prevIn[row]):
+                # print(row)
+                # print(im_region, i, j, "\n")
+                h, w = im_region.shape
+                amax = np.amax(im_region, axis=(0, 1))
+                # print(amax, "\n")
+
+                for h2 in range(h):
+                    for w2 in range(w):
+                        # If this pixel was the max value, copy the gradient to it.
+                        if im_region[h2, w2] == amax:
+                            gradOut[
+                                row, i * self.stride + h2, j * self.stride + w2
+                            ] = gradIn[row, i, j]
+
+        return gradOut
+
+    def fit(self, dataIn):
+        o, h, w = dataIn.shape
+        dataOut = np.zeros((o, h // self.stride, w // self.stride))
+        for row in range(o):
+            for im_region, i, j in self.iterate_regions(dataIn[row]):
+                dataOut[row, i, j] = np.amax(im_region, axis=(0, 1))
+        return None
+
+
+# Avg pooling
+
+# L2 pooling
+
+# Flatten
+class FlattenLayer(Layer):
+    def __init__(self):
+        super().__init__()
+
+    # Input: dataIn , an NxK matrix
+    # Output : An NxK matrix
+    def forward(self, dataIn):
+        self.setPrevIn(dataIn)
+
+        Y = dataIn.reshape(
+            (dataIn.shape[0], dataIn.shape[1] * dataIn.shape[2]), order="F"
+        )
+
+        self.setPrevOut(Y)
+        return Y
+
+    def gradient(self):
+        pass
+
+    def backward(self, gradIn):
+        prevIn = self.getPrevIn()
+        return gradIn.reshape(prevIn.shape, order="F")
+
+    def fit(self, dataIn):
+        Y = dataIn.reshape(
+            (dataIn.shape[0], dataIn.shape[1] * dataIn.shape[2]), order="F"
+        )
+        return Y
 
 
 # ----------------------------------------------------------------
