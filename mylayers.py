@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from layers import Layer
 
+# import asyncio
+
+
 np.random.seed(seed=42)
 
 # ----------------------------------------------------------------
@@ -330,23 +333,21 @@ class ConvolutionLayer(Layer):
         self.kernel_num = kernel_num
         self.kernel_size = kernel_size
         # divide by to kernel_size**2 reduce the variance of our initial values
-        self.kernels = np.random.randn(kernel_num, kernel_size, kernel_size) / (
-            kernel_size**2
-        )
+        self.kernels = (
+            np.random.randn(kernel_num, kernel_size, kernel_size) / (kernel_size**2)
+        ).astype(np.float32)
 
-    def get_kernels(self):
+    def getKernels(self):
         return self.kernels
 
-    def set_kernels(self, kernels):
-        self.kernels = kernels
+    def setKernels(self, kernels):
+        self.kernels = kernels.astype(np.float32)
         self.kernel_num = kernels.shape[0]
         self.kernel_size = kernels.shape[1]
 
     def iterate_regions(self, image, region_size):
         h, w = image.shape
 
-        # for i in range(h - (self.kernel_num // 2 + 1)):
-        #     for j in range(w - (self.kernel_num // 2 + 1)):
         for i in range(h - region_size + 1):
             for j in range(w - region_size + 1):
                 im_region = image[i : (i + region_size), j : (j + region_size)]
@@ -356,80 +357,117 @@ class ConvolutionLayer(Layer):
         self.setPrevIn(dataIn)
 
         o, h, w = dataIn.shape
+        pad_size = int(np.ceil(self.kernel_size / 2))
         output = np.zeros(
             (
                 o,
-                h - self.kernel_num + 1,
-                w - self.kernel_num + 1,
+                h - pad_size,
+                w - pad_size,
             )
         )
 
         for row in range(o):
-            for im_region, i, j in self.iterate_regions(dataIn[row], self.kernel_num):
-                print(row)
-                print(im_region, i, j, "\n")
+            for im_region, i, j in self.iterate_regions(dataIn[row], self.kernel_size):
+                # print(row)
+                # print(im_region, i, j, "\n")
                 output[row, i, j] = np.sum(im_region * self.kernels)
 
         self.setPrevOut(output)
         return output
 
-    # def backprop(self, d_L_d_out, learn_rate):
-    #     """
-    #     Performs a backward pass of the conv layer.
-    #     - d_L_d_out is the loss gradient for this layer's outputs.
-    #     - learn_rate is a float.
-    #     """
-    #     d_L_d_filters = np.zeros(self.filters.shape)
-
-    #     for im_region, i, j in self.iterate_regions(self.last_input):
-    #         for f in range(self.num_filters):
-    #             d_L_d_filters[f] += d_L_d_out[i, j, f] * im_region
-
-    #     # Update filters
-    #     self.filters -= learn_rate * d_L_d_filters
-
-    #     # We aren't returning anything here since we use Conv3x3 as the first layer in our CNN.
-    #     # Otherwise, we'd need to return the loss gradient for this layer's inputs, just like every
-    #     # other layer in our CNN.
-    #     return None
-
     def gradient(self):
         pass
 
-    def backward(self, gradIn, eta=0.01):
-
-        # prevIn = self.getPrevIn()
-        # gradOut = np.zeros((self.kernel_num, self.kernel_size, self.kernel_size))
-
-        # print(gradIn.shape)
-        # for row in range(gradIn.shape[0]):
-        #     for im_region, i, j in self.iterate_regions(prevIn[row]):
-        #         print(row)
-        #         print(im_region, i, j, "\n")
-        #         # for f in range(self.kernel_num):
-        #         gradOut[row] += gradIn[row, i, j] * im_region
+    def updateKernels(self, gradIn, eta=0.001):
         prevIn = self.getPrevIn()
         o, h, w = prevIn.shape
+
+        # gradOut = np.zeros(
+        #     (
+        #         o,
+        #         h - gradIn.shape[1] + 1,
+        #         w - gradIn.shape[1] + 1,
+        #     )
+        # )
+
+        # gradOut = np.zeros(
+        #     self.kernels.size
+        # )
+        # print("Grade Out Shape", gradOut.shape)
+
+        for row in range(o):
+            for im_region, i, j in self.iterate_regions(prevIn[row], gradIn.shape[1]):
+                # print(gradIn.shape[1])
+                # print("!!!", im_region.shape)
+                # # print(row)
+                # print(i, j, "\n")
+                # print(im_region, i, j, "\n")
+                # gradOut[row, i, j] = np.sum(im_region * gradIn[row])
+                dJdK = np.sum(im_region * gradIn[row])
+                self.kernels -= eta * dJdK * (1 / o)
+
+            # self.kernels -= eta * gradOut[row]
+
+        # for row in range(o):
+        #     print("!!", prevIn[row].shape)
+        #     print(gradIn.shape)
+        #     for im_region, i, j in self.iterate_regions(prevIn[row], gradIn.shape[1]):
+        #         print("!!!", im_region.shape)
+        #         print(im_region, i, j, "\n")
+        #         print(gradIn[row].shape)
+        #         gradOut[row, i, j] = np.sum(im_region * gradIn[row])
+
+        #     self.kernels -= eta * gradOut[row]
+
+    def backward(self, gradIn, eta=0.01):
+
+        prevIn = self.getPrevIn()
+        o, h, w = prevIn.shape
+
         gradOut = np.zeros(
             (
                 o,
-                h - gradIn.shape[1] + 1,
-                w - gradIn.shape[1] + 1,
+                h,
+                w,
+            )
+        )
+
+        pad_size = int(np.ceil(self.kernel_size / 2))
+        for row in range(o):
+            new_img = np.pad(
+                gradIn[row], ((pad_size, pad_size), (pad_size, pad_size)), "constant"
+            )
+            # print("!new_img_shape", new_img.shape)
+            # print("!", new_img)
+
+            for im_region, i, j in self.iterate_regions(new_img, self.kernel_size):
+                # print(row)
+                # print(im_region, i, j, "\n")
+                gradOut[row, i, j] = np.sum(im_region * self.kernels.T)
+
+        # self.learn(gradIn, eta)
+
+        return gradOut
+
+    def fit(self, dataIn):
+
+        o, h, w = dataIn.shape
+        pad_size = int(np.ceil(self.kernel_size / 2))
+        output = np.zeros(
+            (
+                o,
+                h - pad_size,
+                w - pad_size,
             )
         )
 
         for row in range(o):
-            for im_region, i, j in self.iterate_regions(prevIn[row], gradIn.shape[1]):
-                print(row)
-                print(im_region, i, j, "\n")
-                gradOut[row, i, j] = np.sum(im_region * gradIn[row])
+            for im_region, i, j in self.iterate_regions(dataIn[row], self.kernel_size):
+                # print(row)
+                # print(im_region, i, j, "\n")
+                output[row, i, j] = np.sum(im_region * self.kernels)
 
-            # TODO check learning part
-            self.kernels -= eta * gradOut[row]
-        return gradOut
-
-    def fit(self, dataIn):
-        return dataIn
+        return output
 
 
 # Max pooling
@@ -493,7 +531,7 @@ class MaxPoolingLayer(Layer):
         for row in range(o):
             for im_region, i, j in self.iterate_regions(dataIn[row]):
                 dataOut[row, i, j] = np.amax(im_region, axis=(0, 1))
-        return None
+        return dataOut
 
 
 # Avg pooling
