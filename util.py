@@ -126,7 +126,7 @@ def draw_scores_with_validation(
         )
     )
 
-    title_text = f"Score to epoch <br>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  with hidden layers: {hidden_layers}"
+    title_text = f"Score to epoch <br>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  layers: {hidden_layers}"
     fig.update_layout(
         title=title_text,
         xaxis_title="Epoch",
