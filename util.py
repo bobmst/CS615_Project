@@ -126,7 +126,7 @@ def draw_scores_with_validation(
         )
     )
 
-    title_text = f"Score to epoch <br>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  with hidden layers: {hidden_layers}"
+    title_text = f"<span style='font-size: 14px;'><b>Score to epoch</b></span> <br> <span style='font-size: 9px;'>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  layers: {hidden_layers}</span>"
     fig.update_layout(
         title=title_text,
         xaxis_title="Epoch",
@@ -162,7 +162,7 @@ def draw_accuracys_with_validation(
     )
 
     # fig = px.line(x=list(zip(*ls_accuracy))[0], y=list(zip(*ls_accuracy))[1], )
-    title_text = f"Accuracy to epoch <br>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  with hidden layers: {hidden_layers}"
+    title_text = f"<span style='font-size: 14px;'><b>Accuracy to epoch</b></span> <br> <span style='font-size: 9px;'>  epoch: {hyperparams['epoch']}, eta: {hyperparams['eta']}, batch size: {hyperparams['batch_size']}, rho1: {hyperparams['rho1']}, rho2: {hyperparams['rho2']} <br>  layers: {hidden_layers}</span>"
     fig.update_layout(
         title=title_text,
         xaxis_title="Epoch",

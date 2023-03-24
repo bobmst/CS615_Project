@@ -1,6 +1,7 @@
 from tqdm import tqdm
 import numpy as np
 import mylayers
+import asyncio
 
 
 def layers_forward(h, Y, layers, eval_obj, print_layer=True):
@@ -48,18 +49,18 @@ def layers_fit(h, Y, layers, eval_obj, print_layer=True):
     return score, h
 
 
-def layers_backward(h, Y, layers, eval_obj, eta=10e-4, print_layer=True):
-    grad = layers[-1].gradient(Y, h)
-    for i in range(len(layers) - 2, 0, -1):
-        newgrad = layers[i].backward(grad)
-        if isinstance(layers[i], mylayers.FullyConnectedLayer):
-            layers[i].updateWeights(grad, eta)
-        if print_layer:
-            print("--- Layer", i, "---")
-            print(newgrad.shape)
-            # print(newgrad)
-        grad = newgrad
-    return grad
+# def layers_backward(h, Y, layers, eval_obj, eta=10e-4, print_layer=True):
+#     grad = layers[-1].gradient(Y, h)
+#     for i in range(len(layers) - 2, 0, -1):
+#         newgrad = layers[i].backward(grad)
+#         if isinstance(layers[i], mylayers.FullyConnectedLayer):
+#             layers[i].updateWeights(grad, eta)
+#         if print_layer:
+#             print("--- Layer", i, "---")
+#             print(newgrad.shape)
+#             # print(newgrad)
+#         grad = newgrad
+#     return grad
 
 
 def layers_backward_adam(
@@ -78,7 +79,7 @@ def layers_backward_adam(
     for i in range(len(layers) - 2, 0, -1):
         newgrad = layers[i].backward(grad)
         if isinstance(layers[i], mylayers.FullyConnectedLayer):
-            layers[i].updateWeights(grad, eta)
+            # layers[i].updateWeights(grad, eta)
             layers[i].updateWeightsAdam(
                 grad,
                 epoch,
@@ -87,6 +88,8 @@ def layers_backward_adam(
                 rho2=rho2,
                 epsilon=epsilon,
             )
+        # if isinstance(layers[i], mylayers.ConvolutionLayer):
+        #     layers[i].updateKernels(grad, eta=eta)
         if print_layer:
             print("--- Layer", i, "---")
             print(newgrad.shape)
@@ -95,53 +98,53 @@ def layers_backward_adam(
     return grad
 
 
-def learn(
-    X,
-    Y,
-    layers,
-    eval_obj,
-    tolerance=10e-10,
-    epoch=10000,
-    eta=10e-4,
-    print_eval=True,
-    print_layer=False,
-    batch_size=100,
-):
-    scores = []
-    n_batchs = X.shape[0] // batch_size
+# def learn(
+#     X,
+#     Y,
+#     layers,
+#     eval_obj,
+#     tolerance=10e-10,
+#     epoch=10000,
+#     eta=10e-4,
+#     print_eval=True,
+#     print_layer=False,
+#     batch_size=100,
+# ):
+#     scores = []
+#     n_batchs = X.shape[0] // batch_size
 
-    n_batchs = int(np.ceil(len(X) / batch_size))
-    X_batches = np.array_split(X, n_batchs)
-    Y_batches = np.array_split(Y, n_batchs)
+#     n_batchs = int(np.ceil(len(X) / batch_size))
+#     X_batches = np.array_split(X, n_batchs)
+#     Y_batches = np.array_split(Y, n_batchs)
 
-    y_hat = None
-    # 🗒️if you don't want to use progress bar use:
-    # for e in range(epoch):
-    for e in (pbar := tqdm(range(epoch))):
-        for n_batch in range(n_batchs):
-            mini_X = X_batches[n_batch]
-            mini_Y = Y_batches[n_batch]
-            score, mini_y_hat = layers_forward(
-                mini_X, mini_Y, layers, eval_obj, print_layer=False
-            )
-            if print_eval:
-                # 🗒️if you don't want to use progress bar use:
-                # print(f"=== Epoch {e} ===")
-                # print(f"🎢Score: {score}")
-                pbar.set_description(f"♾️Epoch {e} with 🎢Score {round(score, 6)}")
-            new_grad = layers_backward(
-                mini_y_hat, mini_Y, layers, eval_obj, eta=eta, print_layer=False
-            )
-            if y_hat is not None:
-                y_hat = np.concatenate((y_hat, mini_y_hat), axis=0)
-            else:
-                y_hat = mini_y_hat
-        scores.append((e, score))
+#     y_hat = None
+#     # 🗒️if you don't want to use progress bar use:
+#     # for e in range(epoch):
+#     for e in (pbar := tqdm(range(epoch))):
+#         for n_batch in range(n_batchs):
+#             mini_X = X_batches[n_batch]
+#             mini_Y = Y_batches[n_batch]
+#             score, mini_y_hat = layers_forward(
+#                 mini_X, mini_Y, layers, eval_obj, print_layer=False
+#             )
+#             if print_eval:
+#                 # 🗒️if you don't want to use progress bar use:
+#                 # print(f"=== Epoch {e} ===")
+#                 # print(f"🎢Score: {score}")
+#                 pbar.set_description(f"♾️Epoch {e} with 🎢Score {round(score, 6)}")
+#             new_grad = layers_backward(
+#                 mini_y_hat, mini_Y, layers, eval_obj, eta=eta, print_layer=False
+#             )
+#             if y_hat is not None:
+#                 y_hat = np.concatenate((y_hat, mini_y_hat), axis=0)
+#             else:
+#                 y_hat = mini_y_hat
+#         scores.append((e, score))
 
-        # stop when score is below tolerance
-        if score < tolerance:
-            break
-    return scores, y_hat
+#         # stop when score is below tolerance
+#         if score < tolerance:
+#             break
+#     return scores, y_hat
 
 
 def evaluate_accuracy_with_one_hot(Y, Y_hat):
@@ -246,6 +249,7 @@ def adam_learn_with_validation(
                 # print(f"=== Epoch {e} ===")
                 # print(f"🎢Score: {score}")
                 pbar.set_description(f"♾️Epoch {e} with 🎢Score {round(score, 6)}")
+
             new_grad = layers_backward_adam(
                 mini_y_hat,
                 mini_Y,
